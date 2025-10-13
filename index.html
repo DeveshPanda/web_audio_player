@@ -1,129 +1,712 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interactive Audio Player</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title> Interactive Audio Player </title>
   <style>
-    body {
-      background: #121212;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
+    :root{
+      --bg:#0f0f14;
+      --panel:#13131a;
+      --accent:#6b7aff;
+      --accent-2:#00e5ff;
+      --muted:#9aa0b4;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body { height:100%; margin:0; background:var(--bg); color:#eef0f6; font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+    .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; gap:28px; padding:28px; box-sizing:border-box; flex-direction:column; }
+
+    .player {
+      width:360px;
+      max-width:92vw;
+      display:flex;
+      gap:18px;
+      flex-direction:column;
+      align-items:center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+      border-radius:18px;
+      padding:18px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.04);
     }
 
+    .title { font-weight:600; letter-spacing:0.2px; font-size:16px; }
+    .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+
+    /* Circle area */
     #circle-container {
       position: relative;
-      width: 300px;
-      height: 300px;
+      width: 280px;
+      height: 280px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
 
-    #dial {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 300px;
-      height: 300px;
-      border: 2px solid #555;
-      border-radius: 50%;
-      box-sizing: border-box;
+    .outer-ring {
+      position:absolute;
+      width:100%;
+      height:100%;
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      filter: drop-shadow(0 8px 22px rgba(107,122,255,0.12));
     }
 
+    /* animated glowing ring */
+    .ring-canvas {
+      width:100%;
+      height:100%;
+      border-radius:50%;
+      background: radial-gradient( circle at 30% 25%, rgba(107,122,255,0.06), transparent 10% ),
+                  conic-gradient(from -90deg, rgba(107,122,255,0.16), rgba(0,229,255,0.05));
+      box-shadow: inset 0 0 40px rgba(107,122,255,0.03);
+    }
+
+    /* progress arc (SVG) placed above ring */
+    .progress-svg { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; }
+
+    /* draggable handle */
     #handle {
+      position:absolute;
+      width:24px;
+      height:24px;
+      border-radius:50%;
+      background: linear-gradient(180deg,var(--accent), #4e5bff);
+      border:2px solid rgba(255,255,255,0.14);
+      box-shadow: 0 6px 18px rgba(107,122,255,0.32), 0 1px 0 rgba(255,255,255,0.06) inset;
+      transform: translate(-50%,-50%);
+      touch-action:none;
+    }
+
+    /* center button */
+    .center {
       position: absolute;
-      width: 20px;
-      height: 20px;
-      background: #3a3aff;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      cursor: pointer;
+      width:120px;
+      height:120px;
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor:pointer;
+      z-index:5;
+      backdrop-filter: blur(6px);
     }
 
-    #fileInput {
-      margin-bottom: 20px;
+    .center.playing { box-shadow: 0 10px 32px rgba(107,122,255,0.2); transform:scale(1.02); }
+    .center-icon { width:46px; height:46px; display:flex; align-items:center; justify-content:center; color:white; }
+
+    .info-row {
+      width:100%;
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      margin-top:6px;
+    }
+    .info {
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .rate {
+      font-weight:600;
+      font-size:18px;
+    }
+    .meta { color:var(--muted); font-size:12px; }
+
+    .controls-row {
+      width:100%;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:8px;
     }
 
-    audio {
-      margin-top: 20px;
-      width: 80%;
+    .btn {
+      background:var(--glass);
+      border-radius:10px;
+      padding:8px 12px;
+      color:var(--muted);
+      border:1px solid rgba(255,255,255,0.03);
+      cursor:pointer;
+      user-select:none;
+      font-size:13px;
     }
+
+    .btn.primary {
+      background: linear-gradient(90deg,var(--accent),var(--accent-2));
+      color:#071025;
+      font-weight:600;
+      border:none;
+    }
+
+    input[type=file] { display:block; margin-top:8px; color:var(--muted); }
+
+    .boost-indicator {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 8px;
+      border-radius:8px;
+      background: rgba(107,122,255,0.08);
+      border:1px solid rgba(107,122,255,0.12);
+      color:var(--accent);
+      font-weight:600;
+      font-size:13px;
+    }
+
+    .hint { color:var(--muted); font-size:12px; margin-top:6px; text-align:center; }
+    @media(max-width:420px){ #circle-container{ width:240px; height:240px } .center{width:100px;height:100px} }
   </style>
 </head>
 <body>
-  <input type="file" id="fileInput" accept="audio/*" />
-  <div id="circle-container">
-    <div id="dial"></div>
-    <div id="handle"></div>
+  <div class="wrap">
+    <div class="player" role="region" aria-label="Circular audio controller">
+      <div style="display:flex;flex-direction:column;align-items:center;width:100%">
+        <div class="title">Circle Audio — control speed & direction</div>
+        <div class="sub">Drag clockwise to speed up, counter-clockwise to rewind. Click circle to boost; SPACE to pause/resume.</div>
+      </div>
+
+      <div id="circle-container" aria-hidden="false">
+        <div class="outer-ring">
+          <div class="ring-canvas"></div>
+        </div>
+
+        <!-- SVG progress arc (will be updated) -->
+        <svg class="progress-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="g1" x1="0%" x2="100%">
+              <stop offset="0%" stop-color="#6b7aff" stop-opacity="1"/>
+              <stop offset="100%" stop-color="#00e5ff" stop-opacity="0.9"/>
+            </linearGradient>
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <circle cx="100" cy="100" r="86" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="8"/>
+          <circle id="progressArc" cx="100" cy="100" r="86" fill="none" stroke="url(#g1)" stroke-width="8" stroke-linecap="round"
+                  stroke-dasharray="0 540" stroke-dashoffset="0" filter="url(#glow)"/>
+        </svg>
+
+        <div id="handle" aria-hidden="true"></div>
+
+        <div class="center" id="centerBtn" role="button" aria-pressed="false" title="Play / Pause (SPACE)">
+          <div class="center-icon" id="centerIcon">
+            <!-- play icon (svg) -->
+            <svg id="playIcon" viewBox="0 0 24 24" width="36" height="36" fill="currentColor">
+              <path d="M8 5v14l11-7z"></path>
+            </svg>
+            <svg id="pauseIcon" viewBox="0 0 24 24" width="36" height="36" fill="currentColor" style="display:none">
+              <path d="M6 19h4V5H6v14zM14 5v14h4V5h-4z"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <div class="info">
+          <div class="rate" id="rateDisplay">1.00×</div>
+          <div class="meta" id="dirDisplay">Forward</div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="boost-indicator" id="boostBadge" style="opacity:0.0; transform:scale(0.94); transition:all .12s ease">
+            BOOST ×2
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <label class="btn" style="display:inline-flex;align-items:center;gap:8px">
+          Load
+          <input id="fileInput" type="file" accept="audio/*" style="display:inline-block;opacity:0;position:absolute;width:0;height:0" />
+        </label>
+
+        <button class="btn" id="rewindBtn">Rewind 3s</button>
+        <button class="btn primary" id="stopAllBtn">Stop</button>
+      </div>
+
+      <div class="hint">Tip: drag fast clockwise for quick speed increase. Click circle to toggle boost. Space toggles play/pause.</div>
+    </div>
   </div>
-  <audio id="audioPlayer" controls></audio>
 
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const audioPlayer = document.getElementById('audioPlayer');
+    /* -------------------------
+       Configuration & state
+       ------------------------- */
+    const MIN_RATE = -2.0;   // simulated reverse max speed (negative)
+    const MAX_RATE = 3.0;    // forward max speed
+    const BOOST_MULTIPLIER = 2.0;
+    const REVERSE_CHUNK_SEC = 0.18; // size of reversed chunk to schedule for reverse playback
+    const REVERSE_INTERVAL_MS = 120; // interval between scheduling chunks (smaller -> smoother but heavier)
+    const FORWARD_MIN_PLAYBACKRATE = 0.06; // treat tiny positive rates as pause
 
-    // For circular control
+    // UI elements
     const container = document.getElementById('circle-container');
     const handle = document.getElementById('handle');
+    const centerBtn = document.getElementById('centerBtn');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const rateDisplay = document.getElementById('rateDisplay');
+    const dirDisplay = document.getElementById('dirDisplay');
+    const boostBadge = document.getElementById('boostBadge');
+    const fileInput = document.getElementById('fileInput');
+    const rewindBtn = document.getElementById('rewindBtn');
+    const stopAllBtn = document.getElementById('stopAllBtn');
+    const progressArc = document.getElementById('progressArc');
 
-    let dragging = false;
+    // audio resources
+    let audioCtx = null;
+    let audioBuffer = null;
+    let audioEl = new Audio();
+    audioEl.crossOrigin = "anonymous";
+    let usingAudioElement = true; // we use <audio> element for forward playback
+    let reverseTimer = null;
+    let activeReverseSources = [];
 
-    // convert a point (x,y) relative to container center into angle 0–360
-    function pointToAngle(x, y) {
-      return Math.atan2(y, x) * (180 / Math.PI) + 90;
-      // adjust so 0° is at top; you can tweak offset
+    // playback state
+    let currentRate = 1.0;
+    let boostOn = false;
+    let isPlaying = false;
+    let lastAngle = 0; // last absolute angle position (0-360)
+    let lastTouchId = null;
+    let lastHandleSetByUser = false;
+
+    
+    function getCenterRect() {
+      const r = container.getBoundingClientRect();
+      return { cx: r.left + r.width/2, cy: r.top + r.height/2, radius: r.width/2 };
     }
 
-    function updateHandle(angle) {
-      // Place the handle at angle around the circle
-      const radius = container.clientWidth / 2;
-      const rad = (angle - 90) * (Math.PI / 180); // shift so 0 is top
-      const cx = container.clientWidth / 2;
-      const cy = container.clientHeight / 2;
+    function pointToAngle(x, y) {
+      // returns angle in degrees: 0 at top, clockwise increasing
+      const ang = Math.atan2(y, x) * 180/Math.PI + 90;
+      return (ang + 360) % 360;
+    }
+
+    function angleToRate(angle) {
+      // Map angle 0..360 to MIN_RATE..MAX_RATE such that 180deg -> 0 (half circle)
+      // Simple linear mapping:
+      const t = angle / 360;
+      const r = MIN_RATE + t * (MAX_RATE - MIN_RATE);
+      return r;
+    }
+
+    function updateHandlePosition(angle) {
+      const { cx, cy, radius } = getCenterRect();
+      const rad = (angle - 90) * Math.PI/180;
       const x = cx + radius * Math.cos(rad);
       const y = cy + radius * Math.sin(rad);
-      handle.style.left = x + 'px';
-      handle.style.top = y + 'px';
+      // convert to container coords
+      const rect = container.getBoundingClientRect();
+      handle.style.left = (x - rect.left) + 'px';
+      handle.style.top = (y - rect.top) + 'px';
     }
 
+    /* -------------------------
+       Visual / UI updates
+       ------------------------- */
+    function updateRateUI(rate) {
+      const absRate = Math.abs(rate);
+      const sign = rate < 0 ? '↩︎ Rewind' : 'Forward';
+      rateDisplay.textContent = rate.toFixed(2) + '×';
+      dirDisplay.textContent = sign + (rate < 0 ? ` (${absRate.toFixed(2)}x)` : '');
+      rateDisplay.setAttribute('aria-label', `Playback rate ${rate.toFixed(2)} times`);
+      // progress arc (when playing forward using audio element)
+      if (audioEl.duration && !isNaN(audioEl.duration) && usingAudioElement) {
+        const pct = (audioEl.currentTime / audioEl.duration) * 100;
+        setProgressArc(pct);
+      }
+      // boost badge
+      if (boostOn) {
+        boostBadge.style.opacity = '1';
+        boostBadge.style.transform = 'scale(1)';
+      } else {
+        boostBadge.style.opacity = '0';
+        boostBadge.style.transform = 'scale(0.94)';
+      }
+    }
+
+    function setPlayingUI(playing) {
+      isPlaying = playing;
+      if (playing) {
+        centerBtn.classList.add('playing');
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+        centerBtn.setAttribute('aria-pressed','true');
+      } else {
+        centerBtn.classList.remove('playing');
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
+        centerBtn.setAttribute('aria-pressed','false');
+      }
+    }
+
+    function setProgressArc(pct) {
+      const circumference = 2 * Math.PI * 86; // r=86 from SVG
+      const dash = (pct/100) * circumference;
+      progressArc.setAttribute('stroke-dasharray', `${dash} ${circumference}`);
+    }
+
+    /* -------------------------
+       File loading
+       ------------------------- */
+    fileInput.addEventListener('change', async (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      // load into audio element (for forward playback) and decode in AudioContext for reverse
+      const url = URL.createObjectURL(f);
+      audioEl.src = url;
+      audioEl.load();
+
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ary = await f.arrayBuffer();
+      try {
+        audioBuffer = await audioCtx.decodeAudioData(ary.slice(0));
+      } catch(e) {
+        // older decodeAudioData with callback fallback
+        audioBuffer = await new Promise((res, rej) => {
+          audioCtx.decodeAudioData(ary.slice(0), res, rej);
+        });
+      }
+
+      // ensure UI defaults
+      usingAudioElement = true;
+      audioEl.playbackRate = Math.max(FORWARD_MIN_PLAYBACKRATE, Math.abs(currentRate));
+      updateRateUI(currentRate);
+      setProgressArc(0);
+      setPlayingUI(false);
+    });
+
+    /* -------------------------
+       Playback switching logic
+       ------------------------- */
+    // start forward playback using audio element
+    async function startForward(rate = 1.0) {
+      stopReverseLoop();
+      usingAudioElement = true;
+      if (audioCtx && audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch(e) {}
+      }
+      // sync current time: if we previously were reversing, we kept playPos; otherwise use audioEl.currentTime
+      if (reverseState && typeof reverseState.playPos === 'number') {
+        audioEl.currentTime = Math.max(0, Math.min(audioEl.duration || 0, reverseState.playPos));
+      }
+      try {
+        audioEl.playbackRate = Math.max(FORWARD_MIN_PLAYBACKRATE, Math.abs(rate));
+      } catch(e) {
+        audioEl.playbackRate = Math.max(FORWARD_MIN_PLAYBACKRATE, Math.abs(rate));
+      }
+      // ensure audio element plays
+      try {
+        await audioEl.play();
+      } catch(err) {
+        // maybe autoplay blocked — set playing flag but rely on user to resume
+      }
+      setPlayingUI(true);
+    }
+
+    // reverse playback simulation state
+    let reverseState = null;
+    function initReverseState(fromTime) {
+      reverseState = {
+        playPos: fromTime, // seconds (cursor where we start playing backwards from)
+        running: false
+      };
+    }
+
+    // create reversed short buffer from audioBuffer between [start, end)
+    function makeReversedSegment(startSec, endSec) {
+      if (!audioBuffer) return null;
+      const sr = audioBuffer.sampleRate;
+      const startFrame = Math.max(0, Math.floor(startSec * sr));
+      const endFrame = Math.max(0, Math.floor(endSec * sr));
+      const length = Math.max(1, endFrame - startFrame);
+      const out = audioCtx.createBuffer(audioBuffer.numberOfChannels, length, sr);
+      for (let ch=0; ch<audioBuffer.numberOfChannels; ch++) {
+        const src = audioBuffer.getChannelData(ch);
+        const dst = out.getChannelData(ch);
+        // copy reversed
+        for (let i=0;i<length;i++) {
+          dst[i] = src[startFrame + (length - 1 - i)];
+        }
+      }
+      return out;
+    }
+
+    // schedule a single reversed chunk at current reverseState.playPos
+    function scheduleReverseChunk(speedFactor=1.0) {
+      if (!reverseState || !audioBuffer) return;
+      const sr = audioBuffer.sampleRate;
+      // chunk length in seconds (we request REVERSE_CHUNK_SEC scaled by speed)
+      const chunkSec = REVERSE_CHUNK_SEC * Math.abs(speedFactor);
+      const end = reverseState.playPos;
+      const start = Math.max(0, end - chunkSec);
+      if (end <= 0) {
+        // reached start -> stop
+        stopReverseLoop();
+        reverseState.playPos = 0;
+      } else {
+        const seg = makeReversedSegment(start, end);
+        if (!seg) { stopReverseLoop(); return; }
+        const src = audioCtx.createBufferSource();
+        src.buffer = seg;
+        src.connect(audioCtx.destination);
+        // we play at normal rate (1) because the buffer is already reversed
+        try { src.start(); } catch(e) {}
+        activeReverseSources.push(src);
+        // cleanup after short delay
+        setTimeout(()=> {
+          const idx = activeReverseSources.indexOf(src);
+          if (idx>=0) activeReverseSources.splice(idx,1);
+          try { src.disconnect(); } catch(e){}
+        }, 1200);
+        // move playPos back
+        reverseState.playPos = start;
+      }
+    }
+
+    function startReverseLoop(rate) {
+      // rate negative indicates speed; pass magnitude
+      if (!audioBuffer || !audioCtx) return;
+      // Ensure audio element paused
+      try { audioEl.pause(); } catch(e){}
+      usingAudioElement = false;
+      // initialize reverse state from current audio element time (or existing playPos)
+      const fromTime = (reverseState && typeof reverseState.playPos === 'number') ? reverseState.playPos : (audioEl.currentTime || 0);
+      initReverseState(fromTime);
+      // start loop
+      reverseState.running = true;
+      // clear any previous
+      stopReverseLoop();
+      // schedule periodically
+      reverseTimer = setInterval(()=> {
+        if (!reverseState || !reverseState.running) return;
+        scheduleReverseChunk(rate);
+      }, REVERSE_INTERVAL_MS);
+      setPlayingUI(true);
+    }
+
+    function stopReverseLoop() {
+      if (reverseTimer) {
+        clearInterval(reverseTimer);
+        reverseTimer = null;
+      }
+      reverseState && (reverseState.running = false);
+      // stop active reverse sources
+      activeReverseSources.forEach(s => {
+        try { s.stop(); } catch(e){}
+        try { s.disconnect(); } catch(e){}
+      });
+      activeReverseSources = [];
+      // don't change UI playing flag here (stopAll will)
+    }
+
+    /* -------------------------
+       Apply a new desired rate
+       ------------------------- */
+    function applyRate(rawRate) {
+      // apply boost
+      let rate = rawRate;
+      if (boostOn) {
+        rate = rate * BOOST_MULTIPLIER;
+      }
+      currentRate = rate;
+      updateRateUI(rate);
+
+      // decide mode
+      if (rate >= FORWARD_MIN_PLAYBACKRATE) {
+        // forward path via audio element
+        if (!audioEl.src) return;
+        startForward(rate);
+      } else if (rate <= -0.06) {
+        // reverse simulation
+        // rate negative: pass magnitude (abs)
+        const speedMagnitude = Math.min(3.5, Math.abs(rate)); // cap
+        startReverseLoop(speedMagnitude);
+      } else {
+        // near zero -> pause everything
+        pauseAll();
+      }
+    }
+
+    
+    async function pauseAll() {
+      // pause forward
+      try { audioEl.pause(); } catch(e){}
+      // stop reverse
+      stopReverseLoop();
+      setPlayingUI(false);
+    }
+
+    async function stopAll() {
+      pauseAll();
+      // reset playback positions
+      if (audioEl) {
+        try { audioEl.currentTime = 0; } catch(e){}
+      }
+      if (reverseState) reverseState.playPos = audioEl ? audioEl.currentTime : 0;
+      setProgressArc(0);
+    }
+
+    // Rewind button (jump back seconds)
+    rewindBtn.addEventListener('click', () => {
+      const jump = 3.0;
+      if (usingAudioElement) {
+        audioEl.currentTime = Math.max(0, (audioEl.currentTime || 0) - jump);
+      } else if (reverseState) {
+        reverseState.playPos = Math.max(0, reverseState.playPos - jump);
+      } else if (audioEl.src) {
+        audioEl.currentTime = Math.max(0, (audioEl.currentTime || 0) - jump);
+      }
+      setProgressArc(audioEl.duration ? (audioEl.currentTime / audioEl.duration) * 100 : 0);
+    });
+
+    stopAllBtn.addEventListener('click', () => {
+      stopAll();
+    });
+
+    /* -------------------------
+       Dragging & interaction
+       ------------------------- */
+    let pointerDown = false;
+    function startPointerTracking(clientX, clientY, pointerId=null) {
+      pointerDown = true;
+      lastTouchId = pointerId;
+      const { cx, cy } = getCenterRect();
+      const x = clientX - cx;
+      const y = clientY - cy;
+      const angle = pointToAngle(x, y);
+      lastAngle = angle;
+      updateHandlePosition(angle);
+      // set rate based on handle position immediately:
+      const r = angleToRate(angle);
+      applyRate(r);
+      lastHandleSetByUser = true;
+    }
+
+    function movePointer(clientX, clientY) {
+      if (!pointerDown) return;
+      const { cx, cy } = getCenterRect();
+      const x = clientX - cx;
+      const y = clientY - cy;
+      const angle = pointToAngle(x, y);
+      // update handle position
+      updateHandlePosition(angle);
+      // map angle to rate
+      const r = angleToRate(angle);
+      applyRate(r);
+      lastAngle = angle;
+    }
+
+    function endPointerTracking() {
+      pointerDown = false;
+      lastTouchId = null;
+      lastHandleSetByUser = false;
+    }
+
+    // mouse events
     handle.addEventListener('mousedown', (e) => {
-      dragging = true;
+      e.preventDefault();
+      startPointerTracking(e.clientX, e.clientY, null);
     });
-
     window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const rect = container.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const x = e.clientX - cx;
-      const y = e.clientY - cy;
-      let angle = pointToAngle(x, y);
-      if (angle < 0) angle += 360;
-      updateHandle(angle);
-
-      // Map angle to playback speed:
-      // e.g., 0° → 0.5×, 180° → 1.0×, 360° → 2.0× (example mapping)
-      const min = 0.5, max = 2.0;
-      const speed = min + (angle / 360) * (max - min);
-      audioPlayer.playbackRate = speed;
+      movePointer(e.clientX, e.clientY);
+    });
+    window.addEventListener('mouseup', (e) => {
+      endPointerTracking();
     });
 
-    window.addEventListener('mouseup', () => {
-      dragging = false;
+    // container click toggles boost
+    container.addEventListener('click', (e) => {
+      // avoid toggling boost when the drag handle or center button was the target
+      if (e.target === handle || e.target === centerBtn || centerBtn.contains(e.target)) return;
+      boostOn = !boostOn;
+      updateRateUI(currentRate);
     });
 
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      audioPlayer.src = url;
+    // touch events
+    handle.addEventListener('touchstart', (ev) => {
+      ev.preventDefault();
+      const t = ev.changedTouches[0];
+      startPointerTracking(t.clientX, t.clientY, t.identifier);
+    }, {passive:false});
+    window.addEventListener('touchmove', (ev) => {
+      const t = ev.changedTouches[0];
+      if (!t) return;
+      // if we started with a specific touch id, match it (simple)
+      movePointer(t.clientX, t.clientY);
+    }, {passive:false});
+    window.addEventListener('touchend', (ev) => {
+      endPointerTracking();
     });
 
-    // initialize handle position
-    updateHandle(0);
+    // center button controls play/pause toggle
+    centerBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!audioEl.src) return;
+      if (isPlaying) {
+        pauseAll();
+      } else {
+        // if current rate indicates reverse, start reverse; else forward
+        applyRate(currentRate);
+      }
+    });
+
+    // SPACE key toggles pause/resume
+    window.addEventListener('keydown', (ev) => {
+      if (ev.code === 'Space') {
+        ev.preventDefault();
+        if (!audioEl.src) return;
+        if (isPlaying) pauseAll();
+        else applyRate(currentRate);
+      }
+    });
+
+    // audio element updates -> progress arc
+    audioEl.addEventListener('timeupdate', () => {
+      if (usingAudioElement && audioEl.duration && !isNaN(audioEl.duration)) {
+        const pct = (audioEl.currentTime / audioEl.duration) * 100;
+        setProgressArc(pct);
+      }
+    });
+
+    // keep reverseState in sync if user clicks timeline in audio element (if shown via controls)
+    audioEl.addEventListener('seeked', () => {
+      if (reverseState) reverseState.playPos = audioEl.currentTime;
+    });
+
+    /* Initialize handle position at top (angle 0) */
+    (function initUI(){
+      const angle = 0;
+      updateHandlePosition(angle);
+      lastAngle = angle;
+      currentRate = angleToRate(angle);
+      updateRateUI(currentRate);
+      setPlayingUI(false);
+    })();
+
+    // ensure audioCtx created on first user interaction (some browsers block otherwise)
+    window.addEventListener('pointerdown', async function ensureAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // remove the listener once created
+      window.removeEventListener('pointerdown', ensureAudioCtx);
+    });
   </script>
 </body>
 </html>
