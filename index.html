@@ -1,166 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Interactive Audio Player</title>
   <style>
     body {
-      font-family: system-ui, sans-serif;
+      background: #121212;
+      color: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-      background: #121212;
-      color: #fff;
+      height: 100vh;
+      margin: 0;
     }
 
-    h1 { margin-bottom: 1rem; }
-
-    .controls {
-      width: 320px;
-      background: #1e1e1e;
-      padding: 1rem;
-      border-radius: 8px;
-      box-shadow: 0 0 8px rgba(255,255,255,0.1);
+    #circle-container {
+      position: relative;
+      width: 300px;
+      height: 300px;
     }
 
-    .controls label {
-      display: block;
-      margin-top: 10px;
+    #dial {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 300px;
+      height: 300px;
+      border: 2px solid #555;
+      border-radius: 50%;
+      box-sizing: border-box;
     }
 
-    input[type="range"], select {
-      width: 100%;
-    }
-
-    button {
-      margin-top: 1rem;
-      padding: 0.5rem 1rem;
+    #handle {
+      position: absolute;
+      width: 20px;
+      height: 20px;
       background: #3a3aff;
-      border: none;
-      color: white;
-      border-radius: 4px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
       cursor: pointer;
     }
 
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    #fileInput {
+      margin-bottom: 20px;
+    }
+
+    audio {
+      margin-top: 20px;
+      width: 80%;
     }
   </style>
 </head>
 <body>
-  <h1>💿 Audio Speed Player</h1>
-
   <input type="file" id="fileInput" accept="audio/*" />
-
-  <div class="controls" style="display:none;" id="controls">
-    <label for="mode">Mode:</label>
-    <select id="mode">
-      <option value="normal">Normal</option>
-      <option value="overlap">Play 1s sound every 0.5s (with overlap)</option>
-      <option value="jumpback">Play 1s sound every 0.5s, jumping back 0.25s</option>
-    </select>
-
-    <label for="interval">Interval (seconds): <span id="intervalValue">0.5</span></label>
-    <input type="range" id="interval" min="0.1" max="2.0" value="0.5" step="0.1">
-
-    <label for="duration">Clip Duration (seconds): <span id="durationValue">1.0</span></label>
-    <input type="range" id="duration" min="0.1" max="3.0" value="1.0" step="0.1">
-
-    <audio id="audioPlayer" controls style="margin-top:1rem; width:100%;"></audio>
-    <button id="startBtn" disabled>Start Loop</button>
-    <button id="stopBtn" disabled>Stop</button>
+  <div id="circle-container">
+    <div id="dial"></div>
+    <div id="handle"></div>
   </div>
+  <audio id="audioPlayer" controls></audio>
 
   <script>
     const fileInput = document.getElementById('fileInput');
     const audioPlayer = document.getElementById('audioPlayer');
-    const controls = document.getElementById('controls');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const intervalRange = document.getElementById('interval');
-    const durationRange = document.getElementById('duration');
-    const intervalValue = document.getElementById('intervalValue');
-    const durationValue = document.getElementById('durationValue');
-    const modeSelect = document.getElementById('mode');
 
-    let audioCtx, audioBuffer, loopTimer;
-    let sourceNodes = [];
+    // For circular control
+    const container = document.getElementById('circle-container');
+    const handle = document.getElementById('handle');
 
-    // File upload handling
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const arrayBuffer = await file.arrayBuffer();
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      const url = URL.createObjectURL(file);
-      audioPlayer.src = url;
-      controls.style.display = 'block';
-      startBtn.disabled = false;
-    });
+    let dragging = false;
 
-    intervalRange.addEventListener('input', () => {
-      intervalValue.textContent = parseFloat(intervalRange.value).toFixed(2);
-    });
-
-    durationRange.addEventListener('input', () => {
-      durationValue.textContent = parseFloat(durationRange.value).toFixed(2);
-    });
-
-    // Main play function for overlapping or jump-back behavior
-    function playSnippet(startTime, duration) {
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioCtx.destination);
-      source.start(0, startTime, duration);
-      sourceNodes.push(source);
+    // convert a point (x,y) relative to container center into angle 0–360
+    function pointToAngle(x, y) {
+      return Math.atan2(y, x) * (180 / Math.PI) + 90;
+      // adjust so 0° is at top; you can tweak offset
     }
 
-    startBtn.addEventListener('click', () => {
-      if (!audioBuffer) return;
+    function updateHandle(angle) {
+      // Place the handle at angle around the circle
+      const radius = container.clientWidth / 2;
+      const rad = (angle - 90) * (Math.PI / 180); // shift so 0 is top
+      const cx = container.clientWidth / 2;
+      const cy = container.clientHeight / 2;
+      const x = cx + radius * Math.cos(rad);
+      const y = cy + radius * Math.sin(rad);
+      handle.style.left = x + 'px';
+      handle.style.top = y + 'px';
+    }
 
-      const mode = modeSelect.value;
-      const interval = parseFloat(intervalRange.value);
-      const duration = parseFloat(durationRange.value);
-      let startPos = 0;
-
-      if (mode === 'normal') {
-        // Just play normally
-        audioPlayer.play();
-        return;
-      }
-
-      audioPlayer.pause();
-      audioCtx.resume();
-
-      stopBtn.disabled = false;
-      startBtn.disabled = true;
-
-      loopTimer = setInterval(() => {
-        if (mode === 'overlap') {
-          // Overlap: new 1s snippet every 0.5s
-          playSnippet(startPos, duration);
-          startPos += interval;
-          if (startPos >= audioBuffer.duration) startPos = 0;
-        } else if (mode === 'jumpback') {
-          // Jump back: play 1s snippet, then move back 0.25s
-          playSnippet(startPos, duration);
-          startPos = Math.max(0, startPos - 0.25);
-        }
-      }, interval * 1000);
+    handle.addEventListener('mousedown', (e) => {
+      dragging = true;
     });
 
-    stopBtn.addEventListener('click', () => {
-      clearInterval(loopTimer);
-      sourceNodes.forEach(src => src.stop());
-      sourceNodes = [];
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = container.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const x = e.clientX - cx;
+      const y = e.clientY - cy;
+      let angle = pointToAngle(x, y);
+      if (angle < 0) angle += 360;
+      updateHandle(angle);
+
+      // Map angle to playback speed:
+      // e.g., 0° → 0.5×, 180° → 1.0×, 360° → 2.0× (example mapping)
+      const min = 0.5, max = 2.0;
+      const speed = min + (angle / 360) * (max - min);
+      audioPlayer.playbackRate = speed;
     });
+
+    window.addEventListener('mouseup', () => {
+      dragging = false;
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      audioPlayer.src = url;
+    });
+
+    // initialize handle position
+    updateHandle(0);
   </script>
 </body>
 </html>
