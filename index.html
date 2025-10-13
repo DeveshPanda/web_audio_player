@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Web Audio Playback Speed</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Audio Player</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -16,55 +16,151 @@
       color: #fff;
     }
 
+    h1 { margin-bottom: 1rem; }
+
     .controls {
-      margin-top: 20px;
-      width: 300px;
+      width: 320px;
+      background: #1e1e1e;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(255,255,255,0.1);
     }
 
-    input[type="range"] {
+    .controls label {
+      display: block;
+      margin-top: 10px;
+    }
+
+    input[type="range"], select {
       width: 100%;
     }
 
-    audio {
-      margin-top: 20px;
-      width: 300px;
+    button {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      background: #3a3aff;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
   </style>
 </head>
 <body>
-  <h1> 💿 Speed Audio Player</h1>
+  <h1>💿 Audio Speed Player</h1>
 
-  <input type="file" id="fileInput" accept="audio/*">
+  <input type="file" id="fileInput" accept="audio/*" />
 
   <div class="controls" style="display:none;" id="controls">
-    <label for="speedRange">Playback Speed: <span id="speedValue">1.0x</span></label>
-    <input type="range" id="speedRange" min="0.5" max="2.0" value="1" step="0.01">
-  </div>
+    <label for="mode">Mode:</label>
+    <select id="mode">
+      <option value="normal">Normal</option>
+      <option value="overlap">Play 1s sound every 0.5s (with overlap)</option>
+      <option value="jumpback">Play 1s sound every 0.5s, jumping back 0.25s</option>
+    </select>
 
-  <audio id="audioPlayer" controls></audio>
+    <label for="interval">Interval (seconds): <span id="intervalValue">0.5</span></label>
+    <input type="range" id="interval" min="0.1" max="2.0" value="0.5" step="0.1">
+
+    <label for="duration">Clip Duration (seconds): <span id="durationValue">1.0</span></label>
+    <input type="range" id="duration" min="0.1" max="3.0" value="1.0" step="0.1">
+
+    <audio id="audioPlayer" controls style="margin-top:1rem; width:100%;"></audio>
+    <button id="startBtn" disabled>Start Loop</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
 
   <script>
     const fileInput = document.getElementById('fileInput');
     const audioPlayer = document.getElementById('audioPlayer');
-    const speedRange = document.getElementById('speedRange');
-    const speedValue = document.getElementById('speedValue');
     const controls = document.getElementById('controls');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const intervalRange = document.getElementById('interval');
+    const durationRange = document.getElementById('duration');
+    const intervalValue = document.getElementById('intervalValue');
+    const durationValue = document.getElementById('durationValue');
+    const modeSelect = document.getElementById('mode');
 
-    fileInput.addEventListener('change', (e) => {
+    let audioCtx, audioBuffer, loopTimer;
+    let sourceNodes = [];
+
+    // File upload handling
+    fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (file) {
-        const url = URL.createObjectURL(file);
-        audioPlayer.src = url;
-        controls.style.display = 'block';
-      }
+      if (!file) return;
+      const arrayBuffer = await file.arrayBuffer();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      const url = URL.createObjectURL(file);
+      audioPlayer.src = url;
+      controls.style.display = 'block';
+      startBtn.disabled = false;
     });
 
-    speedRange.addEventListener('input', () => {
-      const speed = parseFloat(speedRange.value);
-      speedValue.textContent = speed.toFixed(2) + 'x';
-      audioPlayer.playbackRate = speed;
+    intervalRange.addEventListener('input', () => {
+      intervalValue.textContent = parseFloat(intervalRange.value).toFixed(2);
+    });
+
+    durationRange.addEventListener('input', () => {
+      durationValue.textContent = parseFloat(durationRange.value).toFixed(2);
+    });
+
+    // Main play function for overlapping or jump-back behavior
+    function playSnippet(startTime, duration) {
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+      source.start(0, startTime, duration);
+      sourceNodes.push(source);
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (!audioBuffer) return;
+
+      const mode = modeSelect.value;
+      const interval = parseFloat(intervalRange.value);
+      const duration = parseFloat(durationRange.value);
+      let startPos = 0;
+
+      if (mode === 'normal') {
+        // Just play normally
+        audioPlayer.play();
+        return;
+      }
+
+      audioPlayer.pause();
+      audioCtx.resume();
+
+      stopBtn.disabled = false;
+      startBtn.disabled = true;
+
+      loopTimer = setInterval(() => {
+        if (mode === 'overlap') {
+          // Overlap: new 1s snippet every 0.5s
+          playSnippet(startPos, duration);
+          startPos += interval;
+          if (startPos >= audioBuffer.duration) startPos = 0;
+        } else if (mode === 'jumpback') {
+          // Jump back: play 1s snippet, then move back 0.25s
+          playSnippet(startPos, duration);
+          startPos = Math.max(0, startPos - 0.25);
+        }
+      }, interval * 1000);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      clearInterval(loopTimer);
+      sourceNodes.forEach(src => src.stop());
+      sourceNodes = [];
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
     });
   </script>
 </body>
 </html>
-
