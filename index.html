@@ -112,14 +112,12 @@
         const currentTimeDisplay = document.getElementById("currentTime");
         const durationDisplay = document.getElementById("duration");
 
-        let audioContext;
-        let source1, source2;
-        let gainNode1, gainNode2;
         let initialized = false;
-        let intervalId = null;
-        let currentSpeed = 1.0;
         let isPlaying = false;
+        let currentSpeed = 1.0;
         let currentPosition = 0;
+        let activeInterval = null;
+        let targetPosition = 0;
 
         function formatTime(seconds) {
             const mins = Math.floor(seconds / 60);
@@ -127,138 +125,106 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        function initAudioContext() {
-            if (!initialized) {
-                audioContext = new AudioContext();
-                source1 = audioContext.createMediaElementSource(audio1);
-                source2 = audioContext.createMediaElementSource(audio2);
-                gainNode1 = audioContext.createGain();
-                gainNode2 = audioContext.createGain();
-                source1.connect(gainNode1);
-                source2.connect(gainNode2);
-                gainNode1.connect(audioContext.destination);
-                gainNode2.connect(audioContext.destination);
-                initialized = true;
-            }
+        function initAudio() {
+            if (initialized) return;
+            initialized = true;
         }
 
-        fileInput.addEventListener("change", (e) => {
+        fileInput.addEventListener("change", e => {
             const file = e.target.files[0];
-            if (file) {
-                const url = URL.createObjectURL(file);
-                audio1.src = url;
-                audio2.src = url;
-                audio1.load();
-                audio2.load();
-                audio1.addEventListener("loadedmetadata", () => {
-                    seekBar.max = audio1.duration;
-                    durationDisplay.textContent = formatTime(audio1.duration);
-                });
-            }
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            [audio1, audio2].forEach(a => { a.src = url; a.load(); });
+            audio1.onloadedmetadata = () => {
+                seekBar.max = audio1.duration;
+                durationDisplay.textContent = formatTime(audio1.duration);
+            };
         });
 
-        setInterval(() => {
-            if (isPlaying) {
-                currentTimeDisplay.textContent = formatTime(currentPosition);
-                seekBar.value = currentPosition;
-            }
-        }, 100);
+        function updateSeekBar() {
+            if (!isPlaying) return;
+            if (currentSpeed >= 0) currentPosition = audio1.currentTime;
+            else currentPosition = targetPosition;
+            seekBar.value = currentPosition;
+            currentTimeDisplay.textContent = formatTime(currentPosition);
+            requestAnimationFrame(updateSeekBar);
+        }
 
         seekBar.addEventListener("input", () => {
-            currentPosition = parseFloat(seekBar.value);
-            currentTimeDisplay.textContent = formatTime(currentPosition);
-            if (currentSpeed >= 0) {
-                audio1.currentTime = currentPosition;
-                audio2.currentTime = currentPosition;
-            }
+            targetPosition = parseFloat(seekBar.value);
         });
 
-        function startBackwardPlayback() {
-            if (intervalId) clearInterval(intervalId);
-            const updateInterval = parseInt(updateIntervalInput.value);
-            const chunkLength = parseFloat(chunkLengthInput.value);
-            const jumpSize = parseFloat(jumpSizeInput.value);
-            const playbackSpeed = Math.max(0.1, Math.min(2.0, (chunkLength * 1000) / updateInterval));
-            let useAudio1 = true;
-            currentPosition = Math.max(0, currentPosition);
-            audio1.currentTime = currentPosition;
-            audio1.playbackRate = playbackSpeed;
-            audio1.play();
-            gainNode1.gain.value = 1.0;
-            gainNode2.gain.value = 0;
-            intervalId = setInterval(() => {
-                if (!isPlaying) return;
-                currentPosition = Math.max(0, currentPosition - jumpSize);
-                const active = useAudio1 ? audio2 : audio1;
-                const fadeIn = useAudio1 ? gainNode2 : gainNode1;
-                const fadeOut = useAudio1 ? gainNode1 : gainNode2;
-                fadeIn.gain.value = 1.0;
-                fadeOut.gain.value = 0;
-                active.currentTime = currentPosition;
-                active.playbackRate = playbackSpeed;
-                active.play();
-                useAudio1 = !useAudio1;
-                if (currentPosition <= 0) stopPlayback();
-            }, updateInterval);
-        }
-
-        function stopBackwardPlayback() {
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-            }
-            audio1.pause();
-            audio2.pause();
+        function smoothTransitionToTarget() {
+            const alpha = 0.15;
+            const dt = 0.016;
+            currentPosition += -alpha * (currentPosition - targetPosition);
+            [audio1, audio2].forEach(a => a.currentTime = currentPosition);
         }
 
         function startForwardPlayback() {
-            stopBackwardPlayback();
+            clearInterval(activeInterval);
             audio2.pause();
             audio1.currentTime = currentPosition;
             audio1.playbackRate = Math.max(0.0625, currentSpeed);
             audio1.play();
-            const updatePos = setInterval(() => {
-                if (!isPlaying || currentSpeed < 0) clearInterval(updatePos);
-                currentPosition = audio1.currentTime;
-            }, 100);
+            requestAnimationFrame(updateSeekBar);
+        }
+
+        function startBackwardPlayback() {
+            clearInterval(activeInterval);
+            const updateInterval = parseInt(updateIntervalInput.value);
+            const jumpSize = parseFloat(jumpSizeInput.value);
+            const playbackSpeed = parseFloat(reversePlaybackSpeedInput.value);
+            let useAudio1 = true;
+
+            activeInterval = setInterval(() => {
+                if (!isPlaying) return;
+                smoothTransitionToTarget();
+                currentPosition = Math.max(0, currentPosition - jumpSize);
+                const active = useAudio1 ? audio1 : audio2;
+                const inactive = useAudio1 ? audio2 : audio1;
+
+                inactive.pause();
+                active.currentTime = currentPosition;
+                active.playbackRate = playbackSpeed;
+                active.play();
+                useAudio1 = !useAudio1;
+
+                if (currentPosition <= 0) stopPlayback();
+            }, updateInterval);
+
+            requestAnimationFrame(updateSeekBar);
         }
 
         function stopPlayback() {
             isPlaying = false;
-            stopBackwardPlayback();
-            audio1.pause();
-            audio2.pause();
+            clearInterval(activeInterval);
+            [audio1, audio2].forEach(a => a.pause());
         }
 
         playButton.addEventListener("click", () => {
-            initAudioContext();
+            initAudio();
             if (isPlaying) {
                 stopPlayback();
             } else {
                 isPlaying = true;
-                if (currentSpeed < 0) {
-                    startBackwardPlayback();
-                } else {
-                    startForwardPlayback();
-                }
+                if (currentSpeed < 0) startBackwardPlayback();
+                else startForwardPlayback();
             }
         });
 
-        let speedChangeTimeout;
         speedSlider.addEventListener("input", () => {
             const prevSpeed = currentSpeed;
             currentSpeed = parseFloat(speedSlider.value);
             speedValue.textContent = currentSpeed.toFixed(2);
-            const crossedZero = (prevSpeed >= 0 && currentSpeed < 0) || (prevSpeed < 0 && currentSpeed >= 0);
-            if (isPlaying && crossedZero) {
-                if (currentSpeed >= 0) startForwardPlayback();
-                else startBackwardPlayback();
-            }
-            clearTimeout(speedChangeTimeout);
-            speedChangeTimeout = setTimeout(() => {
-                if (isPlaying && currentSpeed < 0) startBackwardPlayback();
-            }, 300);
-            if (isPlaying && currentSpeed >= 0) {
+            const crossed = (prevSpeed >= 0 && currentSpeed < 0) || (prevSpeed < 0 && currentSpeed >= 0);
+            if (isPlaying && crossed) {
+                stopPlayback();
+                setTimeout(() => {
+                    if (currentSpeed < 0) startBackwardPlayback();
+                    else startForwardPlayback();
+                }, 100);
+            } else if (isPlaying && currentSpeed >= 0) {
                 audio1.playbackRate = Math.max(0.0625, currentSpeed);
             }
         });
