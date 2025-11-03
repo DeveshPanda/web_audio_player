@@ -1,233 +1,360 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title> 🎵 Web Audio Player 🎵 </title>
-    <style>
-        body {
-            background-color: #0e0e0e;
-            color: #ffffff;
-            font-family: 'Segoe UI', sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 40px;
-        }
-        h1 {
-            color: #3a3aff;
-            text-shadow: 0 0 12px #3a3aff;
-        }
-        .controls {
-            margin: 20px auto;
-            padding: 20px;
-            background: #1b1b1b;
-            border-radius: 16px;
-            width: 400px;
-            box-shadow: 0 0 20px rgba(58, 58, 255, 0.3);
-        }
-        input[type=range] {
-            width: 80%;
-            height: 6px;
-            -webkit-appearance: none;
-            background: #333;
-            outline: none;
-            border-radius: 3px;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 24px;
-            height: 24px;
-            background: #3a3aff;
-            border: 2px solid #fff;
-            cursor: pointer;
-            border-radius: 50%;
-            box-shadow: 0 0 10px #3a3aff;
-        }
-        #playButton {
-            background: #3a3aff;
-            border: none;
-            color: white;
-            font-size: 16px;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            box-shadow: 0 0 10px #3a3aff;
-            transition: 0.2s;
-        }
-        #playButton:hover {
-            background: #5d5dff;
-        }
-        label, p {
-            font-size: 14px;
-            color: #ccc;
-        }
-        #fileInput {
-            margin: 10px;
-            padding: 10px;
-            background: #1b1b1b;
-            color: #fff;
-            border: 1px solid #3a3aff;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        #seekBar, #speedControl {
-            margin: 10px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>🎵 Web Audio Player 🎵</title>
+  <style>
+    body {
+      background-color: #0e0e0e;
+      color: #ffffff;
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 40px;
+    }
+    h1 {
+      color: #3a3aff;
+      text-shadow: 0 0 12px #3a3aff;
+    }
+    .controls {
+      margin: 20px auto;
+      padding: 20px;
+      background: #1b1b1b;
+      border-radius: 16px;
+      width: 400px;
+      box-shadow: 0 0 20px rgba(58, 58, 255, 0.3);
+    }
+    input[type=range] {
+      width: 80%;
+      height: 6px;
+      -webkit-appearance: none;
+      background: #333;
+      outline: none;
+      border-radius: 3px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      background: #3a3aff;
+      border: 2px solid #fff;
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #3a3aff;
+    }
+    #playButton {
+      background: #3a3aff;
+      border: none;
+      color: white;
+      font-size: 16px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 10px #3a3aff;
+      transition: 0.2s;
+    }
+    #playButton:hover {
+      background: #5d5dff;
+    }
+    label, p {
+      font-size: 14px;
+      color: #ccc;
+    }
+    #fileInput {
+      margin: 10px;
+      padding: 10px;
+      background: #1b1b1b;
+      color: #fff;
+      border: 1px solid #3a3aff;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #seekBar, #speedControl {
+      margin: 10px;
+    }
+    .status {
+      color: #3a3aff;
+      font-size: 12px;
+      margin: 10px;
+    }
+  </style>
 </head>
 <body>
-    <h1>Audio Playback/Speed Controls </h1>
-    <input type="file" id="fileInput" accept="audio/*">
-    <audio id="audio1"></audio>
-    <audio id="audio2"></audio>
+  <h1>Audio Playback/Speed Controls</h1>
+  <input type="file" id="fileInput" accept="audio/*">
+  <div class="status" id="status">Load an audio file to begin</div>
+  
+  <div>
+    <p>Position: <span id="currentTime">0:00</span> / <span id="duration">0:00</span></p>
+    <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1">
+  </div>
+  
+  <p>Speed: <span id="speedValue">1.0</span>x</p>
+  <input type="range" id="speedControl" min="-4.0" max="2.0" step="0.01" value="1.0">
+  <br><br>
+  <button id="playButton">▶ Play / Pause</button>
+  
+  <div class="controls">
+    <label>Segment Duration (s): <input type="number" id="segmentDuration" value="1" step="0.1" min="0.1"></label><br>
+    <label>Step Back (s): <input type="number" id="stepBack" value="0.5" step="0.1" min="0.1"></label><br>
+    <label>Update Interval (ms): <input type="number" id="updateInterval" value="500" step="50" min="50"></label><br>
+    <label>Reverse Playback Speed: <span id="reversePlaybackSpeed">1.0</span>x</label>
+  </div>
 
-    <div>
-        <p>Position: <span id="currentTime">0:00</span> / <span id="duration">0:00</span></p>
-        <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1">
-    </div>
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const speedSlider = document.getElementById("speedControl");
+    const speedValue = document.getElementById("speedValue");
+    const playButton = document.getElementById("playButton");
+    const seekBar = document.getElementById("seekBar");
+    const currentTimeDisplay = document.getElementById("currentTime");
+    const durationDisplay = document.getElementById("duration");
+    const statusDisplay = document.getElementById("status");
+    const reversePlaybackSpeedDisplay = document.getElementById("reversePlaybackSpeed");
+    const segmentDurationInput = document.getElementById("segmentDuration");
+    const stepBackInput = document.getElementById("stepBack");
+    const updateIntervalInput = document.getElementById("updateInterval");
 
-    <p>Speed: <span id="speedValue">1.0</span>x</p>
-    <input type="range" id="speedControl" min="-4.0" max="2.0" step="0.01" value="1.0">
-    <br><br>
-    <button id="playButton">▶ Play / Pause</button>
+    let audioContext = null;
+    let audioBuffer = null;
+    let gainNode = null;
+    
+    let isPlaying = false;
+    let currentSpeed = 1.0;
+    let currentPosition = 0;
+    let duration = 0;
+    let animationFrame = null;
+    let isSeeking = false;
+    let grainScheduler = null;
+    let nextGrainTime = 0;
+    let lastRealTime = 0;
+    let isTransitioning = false;
+    let fadeOutGain = null;
+    let activeGrainSources = [];
 
-    <div class="controls">
-        <label>Segment Duration (s): <input type="number" id="chunkLength" value="1" step="0.1" min="0.1"></label><br>
-        <label>Step Back (s): <input type="number" id="jumpSize" value="0.5" step="0.1" min="0.1"></label><br>
-        <label>Update Interval (ms): <input type="number" id="updateInterval" value="500" step="50" min="250"></label><br>
-        <label>Reverse Playback Speed: <input type="number" id="reversePlaybackSpeed" value="1.0" step="0.1" min="0.1" max="2.0" readonly></label>
-    </div>
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
 
-    <script>
-        const fileInput = document.getElementById("fileInput");
-        const audio1 = document.getElementById("audio1");
-        const audio2 = document.getElementById("audio2");
-        const speedSlider = document.getElementById("speedControl");
-        const speedValue = document.getElementById("speedValue");
-        const playButton = document.getElementById("playButton");
-        const chunkLengthInput = document.getElementById("chunkLength");
-        const jumpSizeInput = document.getElementById("jumpSize");
-        const updateIntervalInput = document.getElementById("updateInterval");
-        const reversePlaybackSpeedInput = document.getElementById("reversePlaybackSpeed");
-        const seekBar = document.getElementById("seekBar");
-        const currentTimeDisplay = document.getElementById("currentTime");
-        const durationDisplay = document.getElementById("duration");
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-        let initialized = false;
-        let isPlaying = false;
-        let currentSpeed = 1.0;
-        let currentPosition = 0;
-        let activeInterval = null;
-        let targetPosition = 0;
+      statusDisplay.textContent = "Loading audio...";
+      
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        gainNode = audioContext.createGain();
+        gainNode.connect(audioContext.destination);
+      }
 
-        function formatTime(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        
+        duration = audioBuffer.duration;
+        seekBar.max = duration;
+        durationDisplay.textContent = formatTime(duration);
+        currentPosition = 0;
+        seekBar.value = 0;
+        currentTimeDisplay.textContent = formatTime(0);
+        statusDisplay.textContent = "Ready to play";
+      } catch (error) {
+        statusDisplay.textContent = "Error loading audio: " + error.message;
+        console.error(error);
+      }
+    });
+
+    function scheduleGrain(audioTime, startPos, grainDuration, overlapRatio) {
+      if (!audioBuffer || startPos < 0 || startPos >= duration) return;
+
+      const actualDuration = Math.min(grainDuration, duration - startPos);
+      if (actualDuration <= 0) return;
+
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      
+      const envelope = audioContext.createGain();
+      source.connect(envelope);
+      envelope.connect(gainNode);
+
+      const fadeTime = actualDuration * overlapRatio;
+      envelope.gain.setValueAtTime(0, audioTime);
+      envelope.gain.linearRampToValueAtTime(1, audioTime + fadeTime);
+      envelope.gain.setValueAtTime(1, audioTime + actualDuration - fadeTime);
+      envelope.gain.linearRampToValueAtTime(0, audioTime + actualDuration);
+
+      source.start(audioTime, startPos, actualDuration);
+    }
+
+    function scheduleGrains() {
+      if (!isPlaying || !audioBuffer) return;
+
+      const lookahead = 0.1;
+      const grainSizeMs = 50; // Fixed grain size
+      const overlapFactor = 0.5; // Fixed overlap factor
+      const grainDuration = grainSizeMs / 1000;
+      const speed = Math.abs(currentSpeed);
+
+      // For reverse playback, use segment duration and step back parameters
+      if (currentSpeed < 0) {
+        const segmentDuration = parseFloat(segmentDurationInput.value);
+        const stepBack = parseFloat(stepBackInput.value);
+        const updateInterval = parseFloat(updateIntervalInput.value);
+        const speed = Math.abs(currentSpeed);
+        
+        while (nextGrainTime < audioContext.currentTime + lookahead) {
+          if (currentPosition > 0) {
+            scheduleGrain(nextGrainTime, currentPosition, segmentDuration, overlapFactor);
+            currentPosition -= stepBack * speed;
+            if (currentPosition < 0) currentPosition = 0;
+          }
+          nextGrainTime += updateInterval / 1000 / speed;
         }
-
-        function initAudio() {
-            if (initialized) return;
-            initialized = true;
+      } else {
+        // Forward playback uses grain-based time stretching
+        const hopSize = grainDuration * (1 - overlapFactor);
+        
+        while (nextGrainTime < audioContext.currentTime + lookahead) {
+          if (currentPosition < duration) {
+            scheduleGrain(nextGrainTime, currentPosition, grainDuration, overlapFactor);
+            currentPosition += hopSize;
+          }
+          nextGrainTime += hopSize / speed;
         }
+      }
 
-        fileInput.addEventListener("change", e => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const url = URL.createObjectURL(file);
-            [audio1, audio2].forEach(a => { a.src = url; a.load(); });
-            audio1.onloadedmetadata = () => {
-                seekBar.max = audio1.duration;
-                durationDisplay.textContent = formatTime(audio1.duration);
-            };
-        });
+      grainScheduler = setTimeout(scheduleGrains, 25);
+    }
 
-        function updateSeekBar() {
-            if (!isPlaying) return;
-            if (currentSpeed >= 0) currentPosition = audio1.currentTime;
-            else currentPosition = targetPosition;
-            seekBar.value = currentPosition;
-            currentTimeDisplay.textContent = formatTime(currentPosition);
-            requestAnimationFrame(updateSeekBar);
+    function startPlayback() {
+      stopPlayback();
+      
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+
+      // Create fresh gain node for this playback session
+      if (gainNode) {
+        gainNode.disconnect();
+      }
+      gainNode = audioContext.createGain();
+      gainNode.connect(audioContext.destination);
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.05);
+
+      nextGrainTime = audioContext.currentTime;
+      lastRealTime = performance.now();
+      
+      scheduleGrains();
+      updatePosition();
+    }
+
+    function stopPlayback() {
+      if (grainScheduler) {
+        clearTimeout(grainScheduler);
+        grainScheduler = null;
+      }
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+      if (fadeOutGain) {
+        fadeOutGain = null;
+      }
+    }
+
+    function updatePosition() {
+      if (!isPlaying || isSeeking) return;
+
+      if (currentSpeed >= 0 && currentPosition >= duration) {
+        currentPosition = duration;
+        isPlaying = false;
+        stopPlayback();
+      } else if (currentSpeed < 0 && currentPosition <= 0) {
+        currentPosition = 0;
+        isPlaying = false;
+        stopPlayback();
+      }
+
+      seekBar.value = currentPosition;
+      currentTimeDisplay.textContent = formatTime(currentPosition);
+
+      if (isPlaying) {
+        animationFrame = requestAnimationFrame(updatePosition);
+      }
+    }
+
+    playButton.addEventListener("click", () => {
+      if (!audioBuffer) {
+        statusDisplay.textContent = "Please load an audio file first";
+        return;
+      }
+
+      if (isPlaying) {
+        isPlaying = false;
+        stopPlayback();
+        statusDisplay.textContent = "Paused";
+      } else {
+        isPlaying = true;
+        startPlayback();
+        statusDisplay.textContent = currentSpeed >= 0 ? "Playing forward" : "Playing reverse";
+      }
+    });
+
+    speedSlider.addEventListener("input", () => {
+      const prevSpeed = currentSpeed;
+      currentSpeed = parseFloat(speedSlider.value);
+      speedValue.textContent = currentSpeed.toFixed(2);
+      reversePlaybackSpeedDisplay.textContent = Math.abs(currentSpeed).toFixed(2);
+
+      const crossed = (prevSpeed >= 0 && currentSpeed < 0) || (prevSpeed < 0 && currentSpeed >= 0);
+      
+      if (isPlaying) {
+        if (crossed) {
+          // Smooth transition: fade out current, fade in new
+          if (gainNode && !isTransitioning) {
+            isTransitioning = true;
+            const fadeTime = 0.1;
+            gainNode.gain.cancelScheduledValues(audioContext.currentTime);
+            gainNode.gain.setValueAtTime(gainNode.gain.value, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeTime);
+            
+            setTimeout(() => {
+              startPlayback();
+              isTransitioning = false;
+            }, fadeTime * 1000);
+          }
+          statusDisplay.textContent = currentSpeed >= 0 ? "Playing forward" : "Playing reverse";
         }
+      }
+    });
 
-        seekBar.addEventListener("input", () => {
-            targetPosition = parseFloat(seekBar.value);
-        });
+    seekBar.addEventListener("mousedown", () => {
+      isSeeking = true;
+    });
 
-        function smoothTransitionToTarget() {
-            const alpha = 0.15;
-            const dt = 0.016;
-            currentPosition += -alpha * (currentPosition - targetPosition);
-            [audio1, audio2].forEach(a => a.currentTime = currentPosition);
-        }
+    seekBar.addEventListener("input", () => {
+      currentPosition = parseFloat(seekBar.value);
+      currentTimeDisplay.textContent = formatTime(currentPosition);
+    });
 
-        function startForwardPlayback() {
-            clearInterval(activeInterval);
-            audio2.pause();
-            audio1.currentTime = currentPosition;
-            audio1.playbackRate = Math.max(0.0625, currentSpeed);
-            audio1.play();
-            requestAnimationFrame(updateSeekBar);
-        }
+    seekBar.addEventListener("mouseup", () => {
+      isSeeking = false;
+      if (isPlaying) {
+        startPlayback();
+      }
+    });
 
-        function startBackwardPlayback() {
-            clearInterval(activeInterval);
-            const updateInterval = parseInt(updateIntervalInput.value);
-            const jumpSize = parseFloat(jumpSizeInput.value);
-            const playbackSpeed = parseFloat(reversePlaybackSpeedInput.value);
-            let useAudio1 = true;
-
-            activeInterval = setInterval(() => {
-                if (!isPlaying) return;
-                smoothTransitionToTarget();
-                currentPosition = Math.max(0, currentPosition - jumpSize);
-                const active = useAudio1 ? audio1 : audio2;
-                const inactive = useAudio1 ? audio2 : audio1;
-
-                inactive.pause();
-                active.currentTime = currentPosition;
-                active.playbackRate = playbackSpeed;
-                active.play();
-                useAudio1 = !useAudio1;
-
-                if (currentPosition <= 0) stopPlayback();
-            }, updateInterval);
-
-            requestAnimationFrame(updateSeekBar);
-        }
-
-        function stopPlayback() {
-            isPlaying = false;
-            clearInterval(activeInterval);
-            [audio1, audio2].forEach(a => a.pause());
-        }
-
-        playButton.addEventListener("click", () => {
-            initAudio();
-            if (isPlaying) {
-                stopPlayback();
-            } else {
-                isPlaying = true;
-                if (currentSpeed < 0) startBackwardPlayback();
-                else startForwardPlayback();
-            }
-        });
-
-        speedSlider.addEventListener("input", () => {
-            const prevSpeed = currentSpeed;
-            currentSpeed = parseFloat(speedSlider.value);
-            speedValue.textContent = currentSpeed.toFixed(2);
-            const crossed = (prevSpeed >= 0 && currentSpeed < 0) || (prevSpeed < 0 && currentSpeed >= 0);
-            if (isPlaying && crossed) {
-                stopPlayback();
-                setTimeout(() => {
-                    if (currentSpeed < 0) startBackwardPlayback();
-                    else startForwardPlayback();
-                }, 100);
-            } else if (isPlaying && currentSpeed >= 0) {
-                audio1.playbackRate = Math.max(0.0625, currentSpeed);
-            }
-        });
-    </script>
+    seekBar.addEventListener("change", () => {
+      isSeeking = false;
+      currentPosition = parseFloat(seekBar.value);
+      if (isPlaying) {
+        startPlayback();
+      }
+    });
+  </script>
 </body>
 </html>
